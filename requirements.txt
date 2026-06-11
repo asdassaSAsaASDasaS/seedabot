@@ -1,0 +1,6 @@
+python-telegram-bot==22.7
+flet==0.85.3
+requests
+streamlit>=1.0
+pandas
+httpx
