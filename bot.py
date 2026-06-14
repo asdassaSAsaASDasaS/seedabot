@@ -3272,6 +3272,33 @@ async def unified_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE
     return ConversationHandler.END
 
 # --- ADMIN ROUTING ---
+async def admin_backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id if update.effective_user else None
+    if user_id != ADMIN_CHAT_ID:
+        await update.message.reply_text("Unauthorized.")
+        return
+        
+    db_file = os.path.join(DB_DIR, 'store.db')
+    if not os.path.exists(db_file):
+        db_file = 'store.db'
+        if not os.path.exists(db_file):
+            await update.message.reply_text("❌ Database file not found!")
+            return
+            
+    try:
+        await update.message.reply_text("⏳ Generating database backup...")
+        with open(db_file, 'rb') as f:
+            await context.bot.send_document(
+                chat_id=ADMIN_CHAT_ID,
+                document=f,
+                filename=f"backup_store_{datetime.date.today().isoformat()}.db",
+                caption="📦 Here is your database backup file."
+            )
+    except Exception as e:
+        logging.error(f"Error in backup command: {e}")
+        await update.message.reply_text(f"❌ Failed to send backup file: {e}")
+
+
 async def admin_deliver_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # Allow admin or verified gardener for their own products
     user_id = update.effective_user.id
@@ -3680,6 +3707,7 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, unified_text_router), group=0)
     # location delete command
     app.add_handler(CommandHandler("location_delete", location_delete_command), group=1)
+    app.add_handler(CommandHandler("backup_db", admin_backup_db_command), group=1)
     app.add_handler(user_conv)
     app.add_handler(admin_conv)
     # handle incoming location messages from users
