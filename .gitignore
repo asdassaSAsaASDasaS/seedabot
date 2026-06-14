@@ -1,0 +1,24 @@
+# Environment files
+.env
+
+# Database files
+store.db
+
+# Log files
+*.log
+bot.err.log
+bot.log
+bot.run.log
+bot_run.log
+
+# Caches
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+.venv/
+.venv-1/

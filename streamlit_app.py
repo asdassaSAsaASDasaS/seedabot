@@ -5,6 +5,26 @@ import tempfile
 import requests
 import streamlit as st
 import pandas as pd
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Wrap sqlite3.connect to redirect database path to DB_DIR and set a 30-second timeout to prevent database locks
+DB_DIR = os.environ.get("DB_DIR", ".")
+if DB_DIR != "." and not os.path.exists(DB_DIR):
+    try:
+        os.makedirs(DB_DIR, exist_ok=True)
+    except Exception:
+        pass
+
+_original_connect = sqlite3.connect
+def secure_connect(database, *args, **kwargs):
+    if database == 'store.db' or database == './store.db':
+        database = os.path.join(DB_DIR, 'store.db')
+    if 'timeout' not in kwargs:
+        kwargs['timeout'] = 30.0
+    return _original_connect(database, *args, **kwargs)
+sqlite3.connect = secure_connect
 
 st.set_page_config(page_title="The Green Oasis - Admin", layout="wide")
 
@@ -42,42 +62,63 @@ def load_catalog_from_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         city TEXT,
         name TEXT,
-        price INTEGER
+        price INTEGER,
+        gardener_id INTEGER,
+        quantity INTEGER DEFAULT 1
     )''')
     conn.commit()
-    cur.execute("SELECT id, city, name, price FROM catalog ORDER BY id")
+    # Add columns if not exist
+    for col in ["gardener_id INTEGER", "quantity INTEGER DEFAULT 1"]:
+        try: cur.execute(f"ALTER TABLE catalog ADD COLUMN {col}")
+        except Exception: pass
+    conn.commit()
+    
+    cur.execute("SELECT id, city, name, price, quantity FROM catalog ORDER BY id")
     rows = cur.fetchall()
     if not rows:
         # populate with sample data
         for city, items in SAMPLE_CATALOG.items():
             for item in items:
-                cur.execute("INSERT INTO catalog (city, name, price) VALUES (?, ?, ?)", (city, item["name"], item["price"]))
+                cur.execute("INSERT INTO catalog (city, name, price, quantity) VALUES (?, ?, ?, 1)", (city, item["name"], item["price"]))
         conn.commit()
-        cur.execute("SELECT id, city, name, price FROM catalog ORDER BY id")
+        cur.execute("SELECT id, city, name, price, quantity FROM catalog ORDER BY id")
         rows = cur.fetchall()
+    # also ensure we include any cities added via the `locations` table
+    try:
+        cur.execute('''CREATE TABLE IF NOT EXISTS locations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE
+        )''')
+        conn.commit()
+        cur.execute("SELECT name FROM locations ORDER BY name")
+        loc_rows = cur.fetchall()
+        locs = [r[0] for r in loc_rows]
+    except Exception:
+        locs = []
+
     conn.close()
 
     catalog = {}
-    for _id, city, name, price in rows:
-        catalog.setdefault(city, []).append({"id": _id, "name": name, "price": price})
+    for _id, city, name, price, quantity in rows:
+        qty = quantity if quantity is not None else 1
+        catalog.setdefault(city, []).append({"id": _id, "name": name, "price": price, "quantity": qty})
+
+    # ensure locations exist as keys even if no products yet
+    for l in locs:
+        if l not in catalog:
+            catalog[l] = []
+
     return catalog
 
 
-def persist_catalog_to_db(catalog):
+def persist_catalog_to_db(updates):
     conn = sqlite3.connect("store.db")
     cur = conn.cursor()
-    cur.execute('''CREATE TABLE IF NOT EXISTS catalog (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        city TEXT,
-        name TEXT,
-        price INTEGER
-    )''')
-    conn.commit()
-    # clear and reinsert
-    cur.execute("DELETE FROM catalog")
-    for city, items in catalog.items():
-        for item in items:
-            cur.execute("INSERT INTO catalog (city, name, price) VALUES (?, ?, ?)", (city, item["name"], int(item["price"])))
+    for item_id, fields in updates.items():
+        cur.execute(
+            "UPDATE catalog SET name = ?, price = ?, quantity = ? WHERE id = ?",
+            (fields["name"], int(fields["price"]), int(fields["quantity"]), int(item_id))
+        )
     conn.commit()
     conn.close()
 
@@ -204,8 +245,22 @@ def main():
         if st.button("Add Location"):
             if new_loc:
                 if new_loc not in catalog:
-                    catalog[new_loc] = []
-                    st.session_state.catalog = catalog
+                    # persist to locations table so bot can read it
+                    try:
+                        conn = sqlite3.connect('store.db')
+                        cur = conn.cursor()
+                        cur.execute('''CREATE TABLE IF NOT EXISTS locations (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            name TEXT UNIQUE
+                        )''')
+                        conn.commit()
+                        cur.execute("INSERT OR IGNORE INTO locations (name) VALUES (?)", (new_loc,))
+                        conn.commit()
+                        conn.close()
+                    except Exception as e:
+                        st.error(f"Failed to persist location: {e}")
+                    # reload catalog from DB to keep canonical state
+                    st.session_state.catalog = load_catalog_from_db()
                     st.success(f"Added location {new_loc}")
                 else:
                     st.warning("Location already exists")
@@ -218,37 +273,55 @@ def main():
         else:
             sel_loc = st.selectbox("Choose location", locations, key="add_prod_loc")
             p_name = st.text_input("Product name", key="add_prod_name")
+            p_qty = st.number_input("Quantity", min_value=1, value=1, step=1, key="add_prod_qty")
             p_price = st.number_input("Price", min_value=0, value=100, step=1, key="add_prod_price")
             if st.button("Add Product"):
                 # insert into DB
                 conn = sqlite3.connect("store.db")
                 cur = conn.cursor()
-                cur.execute("INSERT INTO catalog (city, name, price) VALUES (?, ?, ?)", (sel_loc, p_name, int(p_price)))
+                cur.execute("INSERT INTO catalog (city, name, price, quantity) VALUES (?, ?, ?, ?)", (sel_loc, p_name, int(p_price), int(p_qty)))
                 conn.commit()
                 conn.close()
                 # reload session catalog
+                # ensure location exists in locations table as well
+                try:
+                    conn2 = sqlite3.connect('store.db')
+                    cur2 = conn2.cursor()
+                    cur2.execute('''CREATE TABLE IF NOT EXISTS locations (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT UNIQUE
+                    )''')
+                    cur2.execute("INSERT OR IGNORE INTO locations (name) VALUES (?)", (sel_loc,))
+                    conn2.commit()
+                    conn2.close()
+                except Exception:
+                    pass
                 st.session_state.catalog = load_catalog_from_db()
                 st.success("Product added")
 
-    cols = st.columns([1, 3, 2, 1])
+    cols = st.columns([1, 3, 1, 1, 1])
     cols[0].write("Branch")
     cols[1].write("Product")
-    cols[2].write("Price")
-    cols[3].write("")
+    cols[2].write("Quantity")
+    cols[3].write("Price")
+    cols[4].write("")
 
     # show products with editable fields
     for city, items in list(catalog.items()):
         st.markdown(f"**📍 {city}**")
         for item in items:
             _id = item.get("id")
-            c0, c1, c2, c3 = st.columns([0.5, 3, 1, 1])
+            c0, c1, c2, c3, c4 = st.columns([0.5, 3, 1, 1, 1])
             name_key = f"name_{slug(city)}_{_id}"
+            qty_key = f"qty_{slug(city)}_{_id}"
             price_key = f"price_{slug(city)}_{_id}"
             with c1:
-                st.text_input("", value=item.get("name"), key=name_key)
+                st.text_input("", value=item.get("name"), key=name_key, label_visibility="collapsed")
             with c2:
-                st.number_input("", value=int(item.get("price")), key=price_key)
+                st.number_input("", min_value=1, value=int(item.get("quantity", 1)), key=qty_key, step=1, label_visibility="collapsed")
             with c3:
+                st.number_input("", min_value=0, value=int(item.get("price")), key=price_key, label_visibility="collapsed")
+            with c4:
                 if st.button("Delete", key=f"del_{_id}"):
                     try:
                         conn = sqlite3.connect("store.db")
@@ -267,19 +340,37 @@ def main():
         # persist edits by reading current input widget values
         updated = {}
         for city, items in st.session_state.catalog.items():
-            updated[city] = []
             for item in items:
                 _id = item.get("id")
                 name_key = f"name_{slug(city)}_{_id}"
+                qty_key = f"qty_{slug(city)}_{_id}"
                 price_key = f"price_{slug(city)}_{_id}"
                 new_name = st.session_state.get(name_key, item.get("name"))
+                try:
+                    new_qty = int(st.session_state.get(qty_key, item.get("quantity", 1)))
+                except Exception:
+                    new_qty = item.get("quantity", 1)
                 try:
                     new_price = int(st.session_state.get(price_key, item.get("price")))
                 except Exception:
                     new_price = item.get("price")
-                updated[city].append({"name": new_name, "price": new_price})
+                updated[_id] = {"name": new_name, "price": new_price, "quantity": new_qty}
         try:
             persist_catalog_to_db(updated)
+            # ensure locations table contains all cities
+            try:
+                conn3 = sqlite3.connect('store.db')
+                cur3 = conn3.cursor()
+                cur3.execute('''CREATE TABLE IF NOT EXISTS locations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE
+                )''')
+                for c in st.session_state.catalog.keys():
+                    cur3.execute("INSERT OR IGNORE INTO locations (name) VALUES (?)", (c,))
+                conn3.commit()
+                conn3.close()
+            except Exception:
+                pass
             st.success("Catalog saved to store.db (bot will pick up changes).")
             st.session_state.catalog = load_catalog_from_db()
         except Exception as e:
