@@ -116,6 +116,28 @@ MAJOR_STATE_CITIES = {
     "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur"]
 }
 
+GARDENER_GUIDE_TEXT = (
+    "📖 *Gardener Guide - How to Use the Bot* 🌿\n\n"
+    "Welcome to the Local Plant Shop! Here is a complete guide on how everything works for verified gardeners:\n\n"
+    "1️⃣ *Your Gardener Dashboard*:\n"
+    "   - Access it from the Main Menu. Here you can manage your inventory and track your orders.\n\n"
+    "2️⃣ *How to List Stock / Sell Items*:\n"
+    "   - Go to your Gardener Dashboard -> *Sell Stock*.\n"
+    "   - Enter the product name, price (in ₹), and quantity (in grams).\n"
+    "   - Your listed products will immediately appear in the catalog for customers searching in your registered city.\n\n"
+    "3️⃣ *How Orders Work & Payments*:\n"
+    "   - When a customer orders your product, they will pay directly to your registered UPI ID.\n"
+    "   - Once the payment is verified, you will receive the order details including the customer's delivery address.\n\n"
+    "4️⃣ *How to Deliver & Upload Proof*:\n"
+    "   - Deliver the items to the customer's address.\n"
+    "   - Once dropped off, use the bot to upload a photo proof of delivery using the command:\n"
+    "     `/deliver [Order_ID]` and sending the photo. This updates the status and notifies the customer.\n\n"
+    "⚠️ *CRITICAL POLICY & RULES (Banning Policy)* ⚠️\n"
+    "- We maintain a **zero-tolerance policy** for scams and customer grievances.\n"
+    "- **Lifetime Ban**: If even **1 legitimate complaint** is received from a customer regarding a transaction or delivery, your gardener account will be **banned for life** immediately. You will never be allowed to use this bot again.\n"
+    "- **Do Not Scam**: Never take a payment without delivering the exact item and quantity. Any attempt to scam or deliver low-quality/incorrect seeds/plants will result in an instant lifetime ban and details will be shared with the community."
+)
+
 # --- DATABASE SETUP ---
 def init_db():
     conn = sqlite3.connect('store.db')
@@ -1035,8 +1057,16 @@ async def gardener_approve_callback(update: Update, context: ContextTypes.DEFAUL
             invite_link = "https://t.me/+gc-6mkEvNfwxNmI1"
             await context.bot.send_message(chat_id=row[0], text="✅ You have been verified as a gardener. You can now use the 'Gardener Dashboard' in the main menu.")
             await context.bot.send_message(chat_id=row[0], text=f"Join our gardener group: {invite_link}")
+            await context.bot.send_message(chat_id=row[0], text=GARDENER_GUIDE_TEXT, parse_mode="Markdown")
         except Exception:
             pass
+
+
+async def gardener_guide_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    kb = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="view_menu")]]
+    await query.message.edit_text(GARDENER_GUIDE_TEXT, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
 
 
 async def gardener_become_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2222,6 +2252,7 @@ async def view_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if grow:
             if grow[0] == 1:
                 keyboard.append([InlineKeyboardButton("👨‍🌾 Gardener Dashboard", callback_data="gardener_dashboard")])
+                keyboard.append([InlineKeyboardButton("📖 How to Use (Gardener)", callback_data="gardener_guide")])
         else:
             keyboard.append([InlineKeyboardButton("👨‍🌾 Become a Gardener", callback_data="become_gardener")])
 
@@ -4035,6 +4066,7 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(gardener_profile_callback, pattern="^gardener_profile$"), group=1)
     app.add_handler(CallbackQueryHandler(gardener_edit_field_callback, pattern=r"^gardener_edit_\w+$"), group=1)
     # gardener flows
+    app.add_handler(CallbackQueryHandler(gardener_guide_callback, pattern="^gardener_guide$"), group=1)
     app.add_handler(CallbackQueryHandler(gardener_become_callback, pattern="^become_gardener$"), group=1)
     app.add_handler(CallbackQueryHandler(gardener_can_yes_callback, pattern="^gardener_can_yes$"), group=1)
     app.add_handler(CallbackQueryHandler(gardener_can_no_callback, pattern="^gardener_can_no$"), group=1)
