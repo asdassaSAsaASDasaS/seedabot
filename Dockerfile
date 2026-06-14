@@ -16,9 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN chmod +x run_railway.sh
-
 # ensure bot reads BOT_TOKEN and ADMIN_CHAT_ID from env
 ENV DISABLE_DASHBOARD=1
 
-CMD ["./run_railway.sh"]
+CMD ["python", "bot.py"]
