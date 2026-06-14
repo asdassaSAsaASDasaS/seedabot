@@ -196,6 +196,18 @@ def main():
                             cur.execute("UPDATE orders SET status = 'DELIVERED' WHERE id = ?", (oid,))
                             conn.commit()
                             conn.close()
+                            # Notify user via HTTP POST
+                            if BOT_TOKEN and user_id:
+                                try:
+                                    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+                                    payload = {
+                                        "chat_id": user_id,
+                                        "text": f"📦 *Order Status Update*\n\nYour order *#{oid}* for *{product}* has been marked as *DELIVERED*! Thank you.",
+                                        "parse_mode": "Markdown"
+                                    }
+                                    requests.post(url, json=payload, timeout=5)
+                                except Exception:
+                                    pass
                             st.success(f"Order #{oid} marked DELIVERED")
                             st.experimental_rerun()
                         except Exception as e:

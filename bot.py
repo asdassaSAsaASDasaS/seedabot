@@ -541,6 +541,47 @@ async def admin_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     context.user_data.pop('awaiting_admin_broadcast', None)
 
 
+async def update_order_status_and_notify(order_id: int, new_status: str, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Updates order status in database and notifies the customer via Telegram."""
+    try:
+        conn = sqlite3.connect('store.db')
+        cur = conn.cursor()
+        cur.execute("SELECT user_id, product, price FROM orders WHERE id = ?", (order_id,))
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            logging.error(f"update_order_status_and_notify: Order #{order_id} not found.")
+            return False
+            
+        user_id, product, price = row
+        cur.execute("UPDATE orders SET status = ? WHERE id = ?", (new_status, order_id))
+        conn.commit()
+        conn.close()
+        
+        status_descriptions = {
+            'DELIVERED': "✅ *Delivered* (marked completed)",
+            'CANCELLED': "❌ *Cancelled*",
+            'PENDING': "⏳ *Pending*",
+            'SHIPPED': "📦 *Shipped/On the way*"
+        }
+        status_label = status_descriptions.get(new_status, f"*{new_status}*")
+        
+        notification_text = (
+            f"📦 *Order Status Update*\n\n"
+            f"Your order *#{order_id}* for *{product}* (₹{price}) status has been updated to: {status_label}.\n\n"
+            f"Use the menu to track your order details."
+        )
+        try:
+            await context.bot.send_message(chat_id=user_id, text=notification_text, parse_mode="Markdown")
+        except Exception as telegram_err:
+            logging.error(f"Failed to send order status notification to user {user_id}: {telegram_err}")
+            
+        return True
+    except Exception as e:
+        logging.error(f"Error in update_order_status_and_notify: {e}")
+        return False
+
+
 async def admin_view_orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -548,18 +589,23 @@ async def admin_view_orders_callback(update: Update, context: ContextTypes.DEFAU
         return
     conn = sqlite3.connect('store.db')
     cur = conn.cursor()
-    cur.execute("SELECT id, username, city, product, utr_no, address, status FROM orders ORDER BY id DESC LIMIT 50")
+    cur.execute("SELECT id, username, city, product, utr_no, address, status FROM orders ORDER BY id DESC LIMIT 20")
     rows = cur.fetchall()
     conn.close()
     if not rows:
-        await query.message.reply_text("No orders found.")
+        await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text="No orders found.")
         return
-    lines = []
+        
+    text = "📜 *Recent Orders (Telegram Panel)*\n\n"
+    buttons = []
     for r in rows:
         oid, usern, city, product, utr, addr, status = r
-        lines.append(f"#{oid} • @{usern} • {city} • {product} • {status}")
-    text = "\n".join(lines)
-    await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
+        status_emoji = "⏳" if status == "PENDING" else "✅" if status == "DELIVERED" else "📦" if status == "SHIPPED" else "❌"
+        text += f"#{oid}: *{product}* • @{usern} • {city} • {status_emoji} {status}\n"
+        buttons.append([InlineKeyboardButton(f"⚙️ Manage #{oid}", callback_data=f"admin_manage_order_{oid}")])
+        
+    buttons.append([InlineKeyboardButton("🔙 Back to Menu", callback_data="admin_dashboard")])
+    await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
 
 
 async def admin_revenue_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -626,6 +672,65 @@ async def admin_gardeners_callback(update: Update, context: ContextTypes.DEFAULT
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text="\n".join(parts[:50]))
     if buttons:
         await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text="Approve gardeners below:", reply_markup=InlineKeyboardMarkup(buttons))
+async def admin_manage_order_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    if query.from_user.id != ADMIN_CHAT_ID:
+        return
+    order_id = int(query.data.split("_")[-1])
+    
+    conn = sqlite3.connect('store.db')
+    cur = conn.cursor()
+    cur.execute("SELECT id, user_id, username, city, product, price, utr_no, address, status FROM orders WHERE id = ?", (order_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    if not row:
+        await query.message.reply_text("Order not found.")
+        return
+        
+    oid, uid, username, city, product, price, utr, address, status = row
+    
+    text = (
+        f"⚙️ *Order Management: Order #{oid}*\n\n"
+        f"👤 *Customer:* @{username} (ID: `{uid}`)\n"
+        f"📍 *City:* {city}\n"
+        f"🌿 *Product:* {product}\n"
+        f"💰 *Price:* ₹{price}\n"
+        f"🔢 *UTR:* `{utr}`\n"
+        f"🏠 *Delivery Address:* {address}\n"
+        f"📊 *Current Status:* *{status}*\n\n"
+        f"📸 To upload delivery proof photo for this order, click to copy the command below and send it to the chat:\n"
+        f"`/deliver {oid}`"
+    )
+    
+    buttons = []
+    if status == 'PENDING':
+        buttons.append([InlineKeyboardButton("❌ Cancel Order", callback_data=f"admin_cancel_order_{oid}")])
+    elif status == 'DELIVERED':
+        buttons.append([InlineKeyboardButton("❌ Cancel Order", callback_data=f"admin_cancel_order_{oid}")])
+        
+    buttons.append([InlineKeyboardButton("🔙 Back to Orders List", callback_data="admin_view_orders")])
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+
+
+async def admin_cancel_order_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    if query.from_user.id != ADMIN_CHAT_ID:
+        return
+    order_id = int(query.data.split("_")[-1])
+    
+    success = await update_order_status_and_notify(order_id, 'CANCELLED', context)
+    if success:
+        await query.message.reply_text(f"✅ Order #{order_id} has been CANCELLED and customer notified.")
+    else:
+        await query.message.reply_text(f"⚠️ Failed to cancel Order #{order_id}.")
+        
+    await admin_view_orders_callback(update, context)
+
+
 async def admin_view_catalog_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -1888,6 +1993,115 @@ async def contact_admin_callback(update: Update, context: ContextTypes.DEFAULT_T
     return ConversationHandler.END
 
 
+async def order_ticket_select_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    order_id = int(query.data.split("_")[-1])
+    
+    text = (
+        f"🎫 *Raise Support Ticket for Order #{order_id}*\n\n"
+        f"Please select the topic/reason why you are raising this ticket:"
+    )
+    
+    buttons = [
+        [InlineKeyboardButton("💳 Payment Verification Issue", callback_data=f"raise_ticket_{order_id}_payment")],
+        [InlineKeyboardButton("⏳ Delivery Delay", callback_data=f"raise_ticket_{order_id}_delay")],
+        [InlineKeyboardButton("🥀 Incorrect/Damaged Item", callback_data=f"raise_ticket_{order_id}_damaged")],
+        [InlineKeyboardButton("❓ Other Query", callback_data=f"raise_ticket_{order_id}_other")],
+        [InlineKeyboardButton("🔙 Back", callback_data=f"track_order_{order_id}")]
+    ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+
+
+async def order_raise_ticket_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    
+    # query.data format: raise_ticket_{order_id}_{topic}
+    parts = query.data.split("_")
+    order_id = int(parts[2])
+    topic_key = parts[3]
+    
+    user = query.from_user
+    user_id = user.id
+    username = user.username or user.first_name
+    
+    topic_titles = {
+        'payment': "💳 Payment Verification Issue",
+        'delay': "⏳ Delivery Delay",
+        'damaged': "🥀 Incorrect/Damaged Item",
+        'other': "❓ Other Query"
+    }
+    topic_title = topic_titles.get(topic_key, "General Issue")
+    
+    # Fetch order details to attach to ticket metadata
+    conn = sqlite3.connect('store.db')
+    cur = conn.cursor()
+    cur.execute("SELECT product, price, utr_no FROM orders WHERE id = ?", (order_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    product = "Unknown Product"
+    price = 0
+    utr = "N/A"
+    if row:
+        product, price, utr = row
+        
+    # Send ticket notification to the Admin
+    admin_text = (
+        f"🎫 *New Order Support Ticket Raised*\n\n"
+        f"👤 *Customer:* @{username} (ID: `{user_id}`)\n"
+        f"📦 *Order:* #{order_id} - *{product}* (₹{price})\n"
+        f"🏷 *Topic:* {topic_title}\n"
+        f"🔢 *UTR:* `{utr}`\n\n"
+        f"👉 *Reply directly* to this message to chat with the customer."
+    )
+    
+    try:
+        admin_alert_msg = await context.bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=admin_text,
+            parse_mode="Markdown"
+        )
+        
+        # Log to DB
+        conn = sqlite3.connect('store.db')
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO support_tickets (user_id, username, admin_message_id, user_message_id, created_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, username, admin_alert_msg.message_id, query.message.message_id, datetime.datetime.now().isoformat())
+        )
+        conn.commit()
+        conn.close()
+        
+        # Enter support chat mode
+        context.user_data.pop('expecting_address', None)
+        context.user_data.pop('expecting_utr', None)
+        context.user_data.pop('expecting_quantity', None)
+        context.user_data.pop('expecting_product_name', None)
+        context.user_data.pop('expecting_product_price', None)
+        context.user_data.pop('expecting_city_name', None)
+        context.user_data.pop('expecting_review_order_id', None)
+        context.user_data.pop('expecting_rating_order_id', None)
+        
+        context.user_data['expecting_support_msg'] = True
+        
+        buttons = [[InlineKeyboardButton("❌ Cancel Live Chat", callback_data="cancel_support_ticket")]]
+        
+        user_text = (
+            f"💬 *Support Ticket Raised (Order #{order_id})*\n\n"
+            f"Topic: *{topic_title}*\n\n"
+            f"Please type your details/message below and send it. The admin has been notified and will reply directly in this chat.\n\n"
+            f"Click the button below at any time to end the chat."
+        )
+        await query.message.edit_text(user_text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        
+    except Exception as e:
+        logging.error(f"Error raising support ticket for order: {e}")
+        await query.message.reply_text("⚠️ Failed to initiate support ticket. Please contact the admin directly or try again later.")
+
+
 async def start_support_ticket_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -2648,6 +2862,7 @@ async def track_order_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     kb = []
     if photo and not confirmed:
         kb.append([InlineKeyboardButton("✅ Confirm Delivery Received", callback_data=f"confirm_delivery_{order_id}")])
+    kb.append([InlineKeyboardButton("🎫 Raise Ticket for Order", callback_data=f"order_ticket_select_{order_id}")])
     kb.append([InlineKeyboardButton("🔙 Back to Orders", callback_data="user_orders")])
     
     await query.message.edit_text(status_text, reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
@@ -3584,6 +3799,24 @@ def main_dashboard(page: ft.Page):
                 cur2.execute("UPDATE orders SET status = 'DELIVERED' WHERE id = ?", (order_id,))
                 conn2.commit()
                 conn2.close()
+                # Send order status update notification to customer
+                try:
+                    conn_temp = sqlite3.connect('store.db')
+                    cur_temp = conn_temp.cursor()
+                    cur_temp.execute("SELECT user_id, product FROM orders WHERE id = ?", (order_id,))
+                    t_row = cur_temp.fetchone()
+                    conn_temp.close()
+                    if t_row:
+                        uid, prod = t_row
+                        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+                        payload = {
+                            "chat_id": uid,
+                            "text": f"📦 *Order Status Update*\n\nYour order *#{order_id}* for *{prod}* has been marked as *DELIVERED*! Thank you.",
+                            "parse_mode": "Markdown"
+                        }
+                        requests.post(url, json=payload, timeout=5)
+                except Exception as notify_err:
+                    print('DEBUG: approve_order notify failed', notify_err)
             except Exception as ex:
                 print('DEBUG: approve_order failed', ex)
             try:
@@ -3782,6 +4015,10 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(admin_manage_blocked_callback, pattern="^admin_manage_blocked$"), group=1)
     app.add_handler(CallbackQueryHandler(admin_toggle_block_callback, pattern="^admin_toggle_block_"), group=1)
     app.add_handler(CallbackQueryHandler(admin_view_orders_callback, pattern="^admin_view_orders$"), group=1)
+    app.add_handler(CallbackQueryHandler(admin_manage_order_callback, pattern=r"^admin_manage_order_\d+$"), group=1)
+    app.add_handler(CallbackQueryHandler(admin_cancel_order_callback, pattern=r"^admin_cancel_order_\d+$"), group=1)
+    app.add_handler(CallbackQueryHandler(order_ticket_select_callback, pattern=r"^order_ticket_select_\d+$"), group=1)
+    app.add_handler(CallbackQueryHandler(order_raise_ticket_callback, pattern=r"^raise_ticket_\d+_\w+$"), group=1)
     app.add_handler(CallbackQueryHandler(admin_view_catalog_callback, pattern="^admin_view_catalog$"), group=1)
     app.add_handler(CallbackQueryHandler(admin_manage_locations_callback, pattern="^admin_manage_locations$"), group=1)
     app.add_handler(CallbackQueryHandler(admin_delete_loc_callback, pattern=r"^admin_delete_loc_\d+$"), group=1)
