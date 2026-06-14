@@ -218,6 +218,12 @@ def init_db():
             FOREIGN KEY(state_id) REFERENCES states(id)
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS locations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE
+        )
+    ''')
 
     # 6. Blocked Users
     cursor.execute('''
@@ -253,6 +259,7 @@ def init_db():
             sid = cursor.fetchone()[0]
             for c in c_list:
                 cursor.execute("INSERT OR IGNORE INTO cities (state_id, name) VALUES (?, ?)", (sid, c))
+                cursor.execute("INSERT OR IGNORE INTO locations (name) VALUES (?)", (c,))
         conn.commit()
     conn.close()
 
@@ -431,6 +438,7 @@ async def admin_dashboard_callback(update: Update, context: ContextTypes.DEFAULT
         [InlineKeyboardButton("📜 View Orders", callback_data='admin_view_orders')],
         [InlineKeyboardButton("📦 View Inventory", callback_data='admin_view_catalog')],
         [InlineKeyboardButton("🏙 Manage Cities", callback_data='admin_manage_locations')],
+        [InlineKeyboardButton("✏️ Edit Products", callback_data='admin_edit_products')],
         [InlineKeyboardButton("👨‍🌾 Manage Gardeners", callback_data='admin_gardeners')],
         [InlineKeyboardButton("📢 Broadcast to Users", callback_data='admin_broadcast_users')],
         [InlineKeyboardButton("👨‍🌾 Broadcast to Gardeners", callback_data='admin_broadcast_gardeners')],
@@ -540,7 +548,7 @@ async def admin_view_orders_callback(update: Update, context: ContextTypes.DEFAU
         return
     conn = sqlite3.connect('store.db')
     cur = conn.cursor()
-    cur.execute("SELECT id, username, city, product, utr_no, address, phone, status FROM orders ORDER BY id DESC LIMIT 50")
+    cur.execute("SELECT id, username, city, product, utr_no, address, status FROM orders ORDER BY id DESC LIMIT 50")
     rows = cur.fetchall()
     conn.close()
     if not rows:
@@ -548,8 +556,8 @@ async def admin_view_orders_callback(update: Update, context: ContextTypes.DEFAU
         return
     lines = []
     for r in rows:
-        oid, usern, city, product, utr, addr, phone, status = r
-        lines.append(f"#{oid} • @{usern} • {city} • {product} • {status} • {phone or '-'}")
+        oid, usern, city, product, utr, addr, status = r
+        lines.append(f"#{oid} • @{usern} • {city} • {product} • {status}")
     text = "\n".join(lines)
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
 
@@ -618,6 +626,110 @@ async def admin_gardeners_callback(update: Update, context: ContextTypes.DEFAULT
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text="\n".join(parts[:50]))
     if buttons:
         await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text="Approve gardeners below:", reply_markup=InlineKeyboardMarkup(buttons))
+async def admin_view_catalog_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    if query.from_user.id != ADMIN_CHAT_ID:
+        return
+    conn = sqlite3.connect('store.db')
+    cur = conn.cursor()
+    cur.execute('''CREATE TABLE IF NOT EXISTS catalog (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        city TEXT,
+        name TEXT,
+        price INTEGER,
+        file_id TEXT,
+        gardener_id INTEGER,
+        quantity INTEGER DEFAULT 1
+    )''')
+    conn.commit()
+    
+    cur.execute("""
+        SELECT c.id, c.city, c.name, c.price, c.quantity, g.phone 
+        FROM catalog c 
+        LEFT JOIN gardeners g ON c.gardener_id = g.id 
+        ORDER BY c.city, c.name
+    """)
+    rows = cur.fetchall()
+    conn.close()
+    
+    if not rows:
+        await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text="📦 Catalog/Inventory is empty.")
+        return
+        
+    by_city = {}
+    for cid, city, name, price, qty, g_alias in rows:
+        by_city.setdefault(city, []).append((cid, name, price, qty, g_alias))
+        
+    text = "📦 *Current Inventory by City*\n\n"
+    for city, items in by_city.items():
+        text += f"📍 *{city}*:\n"
+        for cid, name, price, qty, g_alias in items:
+            gardener_info = f" (Gardener: {g_alias})" if g_alias else ""
+            text += f"  • #{cid}: {name} - ₹{price} (Qty: {qty}){gardener_info}\n"
+        text += "\n"
+        
+    if len(text) > 4000:
+        chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
+        for chunk in chunks:
+            await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=chunk, parse_mode="Markdown")
+    else:
+        await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text, parse_mode="Markdown")
+
+
+async def admin_manage_locations_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    if query.from_user.id != ADMIN_CHAT_ID:
+        return
+    conn = sqlite3.connect('store.db')
+    cur = conn.cursor()
+    cur.execute('''CREATE TABLE IF NOT EXISTS locations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE
+    )''')
+    conn.commit()
+    cur.execute("SELECT id, name FROM locations ORDER BY name")
+    rows = cur.fetchall()
+    conn.close()
+    
+    if not rows:
+        msg = "🏙 *No cities registered.*\n\nUse `/location_add CityName` to add one."
+        buttons = [[InlineKeyboardButton("🔙 Back to Dashboard", callback_data="admin_dashboard")]]
+        await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=msg, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        return
+        
+    text = "🏙 *Current Cities/Locations:*\n\n"
+    buttons = []
+    for lid, name in rows:
+        text += f"• {name}\n"
+        buttons.append([InlineKeyboardButton(f"❌ Delete {name}", callback_data=f"admin_delete_loc_{lid}")])
+        
+    text += "\nTo add a city, use:\n`/location_add CityName`"
+    
+    buttons.append([InlineKeyboardButton("🔙 Back to Dashboard", callback_data="admin_dashboard")])
+    await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+
+
+async def admin_delete_loc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    if query.from_user.id != ADMIN_CHAT_ID:
+        return
+    lid = int(query.data.split("_")[-1])
+    conn = sqlite3.connect('store.db')
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM locations WHERE id = ?", (lid,))
+    row = cur.fetchone()
+    if row:
+        name = row[0]
+        cur.execute("DELETE FROM locations WHERE id = ?", (lid,))
+        conn.commit()
+        await query.message.reply_text(f"✅ Deleted location: {name}")
+    else:
+        await query.message.reply_text("Location not found.")
+    conn.close()
+    await admin_manage_locations_callback(update, context)
 
 
 async def admin_edit_products_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -3670,6 +3782,9 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(admin_manage_blocked_callback, pattern="^admin_manage_blocked$"), group=1)
     app.add_handler(CallbackQueryHandler(admin_toggle_block_callback, pattern="^admin_toggle_block_"), group=1)
     app.add_handler(CallbackQueryHandler(admin_view_orders_callback, pattern="^admin_view_orders$"), group=1)
+    app.add_handler(CallbackQueryHandler(admin_view_catalog_callback, pattern="^admin_view_catalog$"), group=1)
+    app.add_handler(CallbackQueryHandler(admin_manage_locations_callback, pattern="^admin_manage_locations$"), group=1)
+    app.add_handler(CallbackQueryHandler(admin_delete_loc_callback, pattern=r"^admin_delete_loc_\d+$"), group=1)
     app.add_handler(CallbackQueryHandler(admin_revenue_callback, pattern="^admin_revenue_cb$"), group=1)
     app.add_handler(CallbackQueryHandler(admin_add_location_callback, pattern="^admin_add_location$"), group=1)
     app.add_handler(CallbackQueryHandler(admin_edit_products_callback, pattern="^admin_edit_products$"), group=1)
