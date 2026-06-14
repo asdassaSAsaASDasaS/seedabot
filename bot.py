@@ -58,6 +58,20 @@ def is_blocked(user_id):
     except Exception:
         return False
 
+# Helper to get user's selected language preference
+def get_user_language(user_id):
+    try:
+        conn = sqlite3.connect('store.db')
+        cur = conn.cursor()
+        cur.execute("SELECT language FROM users WHERE user_id = ? LIMIT 1", (user_id,))
+        row = cur.fetchone()
+        conn.close()
+        if row and row[0]:
+            return row[0]
+    except Exception:
+        pass
+    return 'en'
+
 # Global handler to reject all actions from blocked users immediately
 async def block_check_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -138,6 +152,169 @@ GARDENER_GUIDE_TEXT = (
     "- **Do Not Scam**: Never take a payment without delivering the exact item and quantity. Any attempt to scam or deliver low-quality/incorrect seeds/plants will result in an instant lifetime ban and details will be shared with the community."
 )
 
+LOCALIZATION = {
+    'en': {
+        'disclaimer': (
+            "⚠️ *Disclaimer & Terms of Use*\n\n"
+            "Please read and agree to the following terms to proceed:\n\n"
+            "The admin(s) of this bot have **no liability or responsibility** towards how this bot is used, "
+            "what products are listed, sourced or sold, or any scams/transactions that occur. "
+            "By using this bot, you agree that you do so entirely at your own risk and are solely responsible "
+            "for any transactions or interactions.\n\n"
+            "Do you agree to these terms?"
+        ),
+        'disclaimer_agree': "✅ Agree",
+        'disclaimer_reject': "❌ Reject",
+        'welcome_menu': "Welcome to the Local Plant Shop! 🌿\nChoose an option below:",
+        'view_products': "🛍️ View Products",
+        'my_orders': "📜 My Orders",
+        'refer_earn': "🎁 Refer & Earn",
+        'contact_admin': "✉️ Contact Admin",
+        'modus': "📜 Modus Operandi",
+        'become_gardener': "👨‍🌾 Become a Gardener",
+        'gardener_dashboard': "👨‍🌾 Gardener Dashboard",
+        'gardener_guide': "📖 How to Use (Gardener)",
+        'change_lang': "🌐 Change Language",
+        'lang_selected': "✅ Language set to English!",
+        'select_lang_prompt': (
+            "Please select your language:\n"
+            "कृपया अपनी भाषा चुनें:\n"
+            "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ:\n"
+            "ദയവായി നിങ്ങളുടെ ഭാഷ തിരഞ്ഞെടുക്കുക:"
+        ),
+        'modus_text': (
+            "Seede-manali-se\nYour Local Plug🔌\nGet safe and top quality items Anonymously\n"
+            "The new safe way to get you'r shit without the bullshit\n\n"
+            "How It Works ??\n"
+            "1. Select your city\n"
+            "2. Select products \n"
+            "3. Pay the amount (all details will be auto deleted within 24 hours )\n"
+            "4. You send us an address that's convenient to you \n"
+            "5. We drop the product in discreet packaging at your location and send you exact 📍 and a photo \n"
+            "6. That's it you enjoy yourself \n\nLet your buddies know also \nThank you"
+        )
+    },
+    'hi': {
+        'disclaimer': (
+            "⚠️ *अस्वीकरण और उपयोग की शर्तें*\n\n"
+            "आगे बढ़ने के लिए कृपया निम्नलिखित शर्तों को पढ़ें और सहमत हों:\n\n"
+            "इस बोट के एडमिन की इस बात के लिए **कोई जिम्मेदारी या देनदारी नहीं** है कि इस बोट का उपयोग कैसे किया जाता है, "
+            "कौन से उत्पाद सूचीबद्ध, सोर्स या बेचे जाते हैं, या कोई भी घोटाला/लेनदेन जो होता है। "
+            "इस बोट का उपयोग करके, आप सहमत होते हैं कि आप पूरी तरह से अपने जोखिम पर ऐसा करते हैं और किसी भी लेनदेन या बातचीत के लिए पूरी तरह जिम्मेदार हैं।\n\n"
+            "क्या आप इन शर्तों से सहमत हैं?"
+        ),
+        'disclaimer_agree': "✅ सहमत हूँ",
+        'disclaimer_reject': "❌ अस्वीकार",
+        'welcome_menu': "लोकल प्लांट शॉप में आपका स्वागत है! 🌿\nनीचे एक विकल्प चुनें:",
+        'view_products': "🛍️ उत्पाद देखें",
+        'my_orders': "📜 मेरे ऑर्डर",
+        'refer_earn': "🎁 रेफर और कमाएं",
+        'contact_admin': "✉️ एडमिन से संपर्क करें",
+        'modus': "📜 कार्यप्रणाली (Modus)",
+        'become_gardener': "👨‍🌾 माली बनें",
+        'gardener_dashboard': "👨‍🌾 माली डैशबोर्ड",
+        'gardener_guide': "📖 उपयोग कैसे करें (माली)",
+        'change_lang': "🌐 भाषा बदलें",
+        'lang_selected': "✅ भाषा हिंदी में सेट की गई है!",
+        'select_lang_prompt': (
+            "Please select your language:\n"
+            "कृपया अपनी भाषा चुनें:\n"
+            "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ:\n"
+            "ദയവായി നിങ്ങളുടെ ഭാഷ തിരഞ്ഞെടുക്കുക:"
+        ),
+        'modus_text': (
+            "सीड-मनाली-से\nआपका स्थानीय प्लग🔌\nसुरक्षित और उच्च गुणवत्ता वाली वस्तुएं गुमनाम रूप से प्राप्त करें\n"
+            "बिना किसी बकवास के अपना सामान पाने का नया सुरक्षित तरीका\n\n"
+            "यह कैसे काम करता है ??\n"
+            "1. अपने शहर का चयन करें\n"
+            "2. उत्पाद चुनें\n"
+            "3. राशि का भुगतान करें (सभी विवरण 24 घंटे के भीतर स्वतः हटा दिए जाएंगे)\n"
+            "4. आप हमें एक ऐसा पता भेजें जो आपके लिए सुविधाजनक हो\n"
+            "5. हम आपके स्थान पर विवेकपूर्ण पैकेजिंग में उत्पाद छोड़ देते हैं और आपको सटीक 📍 और एक फोटो भेजते हैं\n"
+            "6. बस इतना ही, आप आनंद लें\n\nअपने दोस्तों को भी बताएं\nधन्यवाद"
+        )
+    },
+    'kn': {
+        'disclaimer': (
+            "⚠️ *ಹಕ್ಕುತ್ಯಾಗ ಮತ್ತು ಬಳಕೆಯ ನಿಯಮಗಳು*\n\n"
+            "ಮುಂದುವರೆಯಲು ದಯವಿಟ್ಟು ಈ ಕೆಳಗಿನ ನಿಯಮಗಳನ್ನು ಓದಿ ಮತ್ತು ಒಪ್ಪಿಕೊಳ್ಳಿ:\n\n"
+            "ಈ ಬೋಟ್ ಅನ್ನು ಹೇಗೆ ಬಳಸಲಾಗುತ್ತದೆ, ಯಾವ ಉತ್ಪನ್ನಗಳನ್ನು ಪಟ್ಟಿ ಮಾಡಲಾಗಿದೆ, ಮೂಲ ಅಥವಾ ಮಾರಾಟ ಮಾಡಲಾಗುತ್ತದೆ ಅಥವಾ ಯಾವುದೇ ಹಗರಣಗಳು/ವಹಿವಾಟುಗಳು ನಡೆಯುತ್ತವೆ ಎಂಬುದರ ಬಗ್ಗೆ ಈ ಬೋಟ್‌ನ ನಿರ್ವಾಹಕರು (ಅಡ್ಮಿನ್) **ಯಾವುದೇ ಹೊಣೆಗಾರಿಕೆ ಅಥವಾ ಜವಾಬ್ದಾರಿಯನ್ನು ಹೊಂದಿರುವುದಿಲ್ಲ**. "
+            "ಈ ಬೋಟ್ ಬಳಸುವ ಮೂಲಕ, ನೀವು ಸಂಪೂರ್ಣವಾಗಿ ನಿಮ್ಮ ಸ್ವಂತ ಅಪಾಯದಲ್ಲಿ ಇದನ್ನು ಮಾಡಲು ಒಪ್ಪುತ್ತೀರಿ ಮತ್ತು ಯಾವುದೇ ವಹಿವಾಟುಗಳು ಅಥವಾ ಸಂವಹನಗಳಿಗೆ ಸಂಪೂರ್ಣ ಜವಾಬ್ದಾರರಾಗಿರುತ್ತೀರಿ.\n\n"
+            "ಈ ನಿಯಮಗಳಿಗೆ ನೀವು ಒಪ್ಪುತ್ತೀರಾ?"
+        ),
+        'disclaimer_agree': "✅ ಒಪ್ಪುತ್ತೇನೆ",
+        'disclaimer_reject': "❌ ತಿರಸ್ಕರಿಸು",
+        'welcome_menu': "ಸ್ಥಳೀಯ ಸಸ್ಯ ಅಂಗಡಿಗೆ ಸುಸ್ವಾಗತ! 🌿\nಕೆಳಗಿನ ಆಯ್ಕೆಯನ್ನು ಆರಿಸಿ:",
+        'view_products': "🛍️ ಉತ್ಪನ್ನಗಳನ್ನು ವೀಕ್ಷಿಸಿ",
+        'my_orders': "📜 ನನ್ನ ಆರ್ಡರ್‌ಗಳು",
+        'refer_earn': "🎁 ರೆಫರ್ ಮಾಡಿ ಮತ್ತು ಗಳಿಸಿ",
+        'contact_admin': "✉️ ಅಡ್ಮಿನ್ ಸಂಪರ್ಕಿಸಿ",
+        'modus': "📜 ಕಾರ್ಯಾಚರಣೆಯ ವಿಧಾನ",
+        'become_gardener': "👨‍🌾 ಮಾಲಿ (ಗಾರ್ಡನರ್) ಆಗಿ",
+        'gardener_dashboard': "👨‍🌾 ಮಾಲಿ ಡ್ಯಾಶ್‌ಬೋರ್ಡ್",
+        'gardener_guide': "📖 ಹೇಗೆ ಬಳಸುವುದು (ಮಾಲಿ)",
+        'change_lang': "🌐 ಭಾಷೆ ಬದಲಾಯಿಸಿ",
+        'lang_selected': "✅ ಭಾಷೆಯನ್ನು ಕನ್ನಡಕ್ಕೆ ಹೊಂದಿಸಲಾಗಿದೆ!",
+        'select_lang_prompt': (
+            "Please select your language:\n"
+            "कृपया अपनी भाषा चुनें:\n"
+            "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ:\n"
+            "ദയവായി നിങ്ങളുടെ ഭാഷ തിരഞ്ഞെടുക്കുക:"
+        ),
+        'modus_text': (
+            "ಸೀಡ್-ಮನಾಲಿ-ಸೇ\nನಿಮ್ಮ ಸ್ಥಳೀಯ ಪ್ಲಗ್🔌\nಸುರಕ್ಷಿತ ಮತ್ತು ಉತ್ತಮ ಗುಣಮಟ್ಟದ ವಸ್ತುಗಳನ್ನು ಅನಾಮಧೇಯವಾಗಿ ಪಡೆಯಿರಿ\n"
+            "ಯಾವುದೇ ತೊಂದರೆಯಿಲ್ಲದೆ ನಿಮ್ಮ ವಸ್ತುಗಳನ್ನು ಪಡೆಯಲು ಹೊಸ ಸುರಕ್ಷಿತ ಮಾರ್ಗ\n\n"
+            "ಇದು ಹೇಗೆ ಕೆಲಸ ಮಾಡುತ್ತದೆ ??\n"
+            "1. ನಿಮ್ಮ ನಗರವನ್ನು ಆರಿಸಿ\n"
+            "2. ಉತ್ಪನ್ನಗಳನ್ನು ಆರಿಸಿ\n"
+            "3. ಹಣ ಪಾವತಿಸಿ (ಎಲ್ಲಾ ವಿವರಗಳು 24 ಗಂಟೆಗಳ ಒಳಗೆ ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಅಳಿಸಲ್ಪಡುತ್ತವೆ)\n"
+            "4. ನಿಮಗೆ ಅನುಕೂലಕರವಾದ ವಿಳಾಸವನ್ನು ನಮಗೆ ಕಳುಹಿಸಿ\n"
+            "5. ನಾವು ನಿಮ್ಮ ಸ್ಥಳದಲ್ಲಿ ರಹಸ್ಯ ಪ್ಯಾಕೇಜಿಂಗ್‌ನಲ್ಲಿ ಉತ್ಪನ್ನವನ್ನು ತಲುಪಿಸುತ್ತೇವೆ ಮತ್ತು ನಿಖರವಾದ 📍 ಮತ್ತು ಫೋಟೋವನ್ನು ಕಳುಹಿಸುತ್ತೇವೆ\n"
+            "6. ಅಷ್ಟೇ ನೀವು ಆನಂದಿಸಿ\n\nನಿಮ್ಮ ಸ್ನೇಹಿತರಿಗೂ ತಿಳಿಸಿ\nಧನ್ಯವಾದಗಳು"
+        )
+    },
+    'ml': {
+        'disclaimer': (
+            "⚠️ *ബാധ്യതാ നിരാകരണവും ഉപയോഗ നിബന്ധനകളും*\n\n"
+            "തുടരുന്നതിന് ദയവായി താഴെ പറയുന്ന നിബന്ധനകൾ വായിച്ച് അംഗീകരിക്കുക:\n\n"
+            "ഈ ബോട്ട് എങ്ങനെ ഉപയോഗിക്കുന്നു എന്നതിനോ, ഏതൊക്കെ ഉൽപ്പന്നങ്ങൾ ലിസ്റ്റ് ചെയ്യപ്പെടുന്നു അല്ലെങ്കിൽ വിൽക്കപ്പെടുന്നു എന്നതിനോ, ഉണ്ടാകുന്ന ഏതെങ്കിലും തട്ടിപ്പുകൾക്കോ ഇടപാടുകൾക്കോ ഈ ബോട്ടിന്റെ അഡ്മിന് **യാതൊരു ഉത്തരവാദിത്തവുമില്ല**. "
+            "ഈ ബോട്ട് ഉപയോഗിക്കുന്നതിലൂടെ, നിങ്ങൾ പൂർണ്ണമായും സ്വന്തം ഉത്തരവാദിത്തത്തിൽ ഇത് ചെയ്യുന്നുവെന്നും ഏതെങ്കിലും ഇടപാടുകൾക്കോ ആശയവിനിമയങ്ങൾക്കോ നിങ്ങൾ മാത്രമാണ് ഉത്തരവാദിയെന്നും അംഗീകരിക്കുന്നു.\n\n"
+            "ഈ നിബന്ധനകൾ നിങ്ങൾ അംഗീകരിക്കുന്നുണ്ടോ?"
+        ),
+        'disclaimer_agree': "✅ സമ്മതിക്കുന്നു",
+        'disclaimer_reject': "❌ നിരസിക്കുന്നു",
+        'welcome_menu': "പ്ലാന്റ് ഷോപ്പിലേക്ക് സ്വാഗതം! 🌿\nതാഴെയുള്ള ഒരു ഓപ്ഷൻ തിരഞ്ഞെടുക്കുക:",
+        'view_products': "🛍️ ഉൽപ്പന്നങ്ങൾ കാണുക",
+        'my_orders': "📜 എന്റെ ഓർഡറുകൾ",
+        'refer_earn': "🎁 റഫർ ചെയ്ത് നേടുക",
+        'contact_admin': "✉️ അഡ്മിനെ ബന്ധപ്പെടുക",
+        'modus': "📜 പ്രവർത്തന രീതി",
+        'become_gardener': "👨‍🌾 ഒരു ഗാർഡനർ ആകുക",
+        'gardener_dashboard': "👨‍🌾 ഗാർഡനർ ഡാഷ്‌ബോർഡ്",
+        'gardener_guide': "📖 എങ്ങനെ ഉപയോഗിക്കാം (ഗാർഡനർ)",
+        'change_lang': "🌐 ഭാഷ മാറ്റുക",
+        'lang_selected': "✅ ഭാഷ മലയാളത്തിലേക്ക് മാറ്റിയിരിക്കുന്നു!",
+        'select_lang_prompt': (
+            "Please select your language:\n"
+            "कृपया अपनी भाषा चुनें:\n"
+            "ದಯവിಟ್ಟು ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ:\n"
+            "ദയവായി നിങ്ങളുടെ ഭാഷ തിരഞ്ഞെടുക്കുക:"
+        ),
+        'modus_text': (
+            "സീഡ്-മണാലി-സെ\nനിങ്ങളുടെ ലോക്കൽ പ്ലഗ്🔌\nസുരക്ഷിതവും മികച്ചതുമായ ഉൽപ്പന്നങ്ങൾ അജ്ഞാതമായി നേടൂ\n"
+            "യാതൊരു ബുദ്ധിമുട്ടും കൂടാതെ നിങ്ങളുടെ സാധനങ്ങൾ കൈപ്പറ്റാനുള്ള പുതിയ സുരക്ഷിത മാർഗ്ഗം\n\n"
+            "ഇത് എങ്ങനെ പ്രവർത്തിക്കുന്നു ??\n"
+            "1. നിങ്ങളുടെ നഗരം തിരഞ്ഞെടുക്കുക\n"
+            "2. ഉൽപ്പന്നങ്ങൾ തിരഞ്ഞെടുക്കുക\n"
+            "3. തുക അടയ്ക്കുക (എല്ലാ വിവരങ്ങളും 24 മണിക്കൂറിനുള്ളിൽ സ്വയമേവ ഇല്ലാതാക്കപ്പെടും)\n"
+            "4. നിങ്ങൾക്ക് സൗകര്യപ്രദമായ ഒരു വിലാസം ഞങ്ങൾക്ക് അയച്ചുതരിക\n"
+            "5. ഞങ്ങൾ നിങ്ങളുടെ ലൊക്കേഷനിൽ രഹസ്യമായി ഉൽപ്പന്നം എത്തിക്കുകയും കൃത്യമായ 📍 ലൊക്കേഷനും ഫോട്ടോയും അയക്കുകയും ചെയ്യും\n"
+            "6. അത്രമാത്രം, നിങ്ങൾ ആസ്വദിക്കൂ\n\nനിങ്ങളുടെ സുഹൃത്തുക്കളെയും അറിയിക്കുക\nനന്ദി"
+        )
+    }
+}
+
+
 # --- DATABASE SETUP ---
 def init_db():
     conn = sqlite3.connect('store.db')
@@ -217,10 +394,11 @@ def init_db():
             referred_by INTEGER,
             referral_count INTEGER DEFAULT 0,
             points INTEGER DEFAULT 0,
-            agreed_disclaimer INTEGER DEFAULT 0
+            agreed_disclaimer INTEGER DEFAULT 0,
+            language TEXT DEFAULT 'en'
         )
     ''')
-    for col in ["referred_by INTEGER", "referral_count INTEGER DEFAULT 0", "points INTEGER DEFAULT 0", "agreed_disclaimer INTEGER DEFAULT 0"]:
+    for col in ["referred_by INTEGER", "referral_count INTEGER DEFAULT 0", "points INTEGER DEFAULT 0", "agreed_disclaimer INTEGER DEFAULT 0", "language TEXT DEFAULT 'en'"]:
         try: cursor.execute(f"ALTER TABLE users ADD COLUMN {col}")
         except Exception: pass
 
@@ -375,33 +553,50 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if ref_id:
         context.user_data['referred_by'] = ref_id
 
-    # Check if user has already agreed to the disclaimer
+    # Check if user has already selected language and agreed to the disclaimer
     conn = sqlite3.connect('store.db')
     cur = conn.cursor()
     cur.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
     conn.commit()
-    cur.execute("SELECT agreed_disclaimer FROM users WHERE user_id = ? LIMIT 1", (user_id,))
+    cur.execute("SELECT language, agreed_disclaimer FROM users WHERE user_id = ? LIMIT 1", (user_id,))
     row = cur.fetchone()
-    agreed = row[0] if row else 0
     conn.close()
 
-    if not agreed:
-        # Show disclaimer
+    lang = row[0] if row and row[0] else None
+    agreed = row[1] if row else 0
+
+    if not lang or lang not in ('en', 'hi', 'kn', 'ml'):
+        # Show language selection
         keyboard = [
             [
-                InlineKeyboardButton("✅ Agree", callback_data="disclaimer_agree"),
-                InlineKeyboardButton("❌ Reject", callback_data="disclaimer_reject")
+                InlineKeyboardButton("🇬🇧 English", callback_data="set_lang_en"),
+                InlineKeyboardButton("🇮🇳 Hindi (हिन्दी)", callback_data="set_lang_hi")
+            ],
+            [
+                InlineKeyboardButton("🇮🇳 Kannada (ಕನ್ನಡ)", callback_data="set_lang_kn"),
+                InlineKeyboardButton("🇮🇳 Malayalam (മലയാളം)", callback_data="set_lang_ml")
             ]
         ]
-        disclaimer_text = (
-            "⚠️ *Disclaimer & Terms of Use*\n\n"
-            "Please read and agree to the following terms to proceed:\n\n"
-            "The admin(s) of this bot have **no liability or responsibility** towards how this bot is used, "
-            "what products are listed, sourced or sold, or any scams/transactions that occur. "
-            "By using this bot, you agree that you do so entirely at your own risk and are solely responsible "
-            "for any transactions or interactions.\n\n"
-            "Do you agree to these terms?"
+        prompt = (
+            "Please select your language:\n"
+            "कृपया अपनी भाषा चुनें:\n"
+            "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ:\n"
+            "ദയവായി നിങ്ങളുടെ ഭാഷ തിരഞ്ഞെടുക്കുക:"
         )
+        await update.message.reply_text(prompt, reply_markup=InlineKeyboardMarkup(keyboard))
+        return ConversationHandler.END
+
+    context.user_data['lang'] = lang
+
+    if not agreed:
+        # Show disclaimer in selected language
+        keyboard = [
+            [
+                InlineKeyboardButton(LOCALIZATION[lang]['disclaimer_agree'], callback_data="disclaimer_agree"),
+                InlineKeyboardButton(LOCALIZATION[lang]['disclaimer_reject'], callback_data="disclaimer_reject")
+            ]
+        ]
+        disclaimer_text = LOCALIZATION[lang]['disclaimer']
         await update.message.reply_text(disclaimer_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         return ConversationHandler.END
 
@@ -449,6 +644,69 @@ async def disclaimer_reject_callback(update: Update, context: ContextTypes.DEFAU
     await query.answer()
     await query.message.edit_text("❌ *Terms Rejected.*\n\nYou have rejected the terms and cannot use this bot. If you change your mind, send /start.", parse_mode="Markdown")
     return ConversationHandler.END
+
+
+async def set_lang_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    lang = query.data.split("_")[-1]
+    user_id = query.from_user.id
+    
+    conn = sqlite3.connect('store.db')
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET language = ? WHERE user_id = ?", (lang, user_id))
+    conn.commit()
+    conn.close()
+    
+    context.user_data['lang'] = lang
+    
+    # Check if agreed disclaimer
+    conn = sqlite3.connect('store.db')
+    cur = conn.cursor()
+    cur.execute("SELECT agreed_disclaimer FROM users WHERE user_id = ? LIMIT 1", (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    
+    agreed = row[0] if row else 0
+    
+    await query.message.reply_text(LOCALIZATION[lang]['lang_selected'])
+    
+    if not agreed:
+        # Show disclaimer in selected language
+        keyboard = [
+            [
+                InlineKeyboardButton(LOCALIZATION[lang]['disclaimer_agree'], callback_data="disclaimer_agree"),
+                InlineKeyboardButton(LOCALIZATION[lang]['disclaimer_reject'], callback_data="disclaimer_reject")
+            ]
+        ]
+        await query.message.reply_text(LOCALIZATION[lang]['disclaimer'], reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    else:
+        await view_menu_callback(update, context)
+
+
+async def change_language_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    keyboard = [
+        [
+            InlineKeyboardButton("🇬🇧 English", callback_data="set_lang_en"),
+            InlineKeyboardButton("🇮🇳 Hindi (हिन्दी)", callback_data="set_lang_hi")
+        ],
+        [
+            InlineKeyboardButton("🇮🇳 Kannada (ಕನ್ನಡ)", callback_data="set_lang_kn"),
+            InlineKeyboardButton("🇮🇳 Malayalam (മലയാളം)", callback_data="set_lang_ml")
+        ],
+        [
+            InlineKeyboardButton("🔙 Back to Menu", callback_data="view_menu")
+        ]
+    ]
+    prompt = (
+        "Please select your language:\n"
+        "कृपया अपनी भाषा चुनें:\n"
+        "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ:\n"
+        "ദയവായി നിങ്ങളുടെ ഭാഷ തിരഞ്ഞെടുക്കുക:"
+    )
+    await query.message.edit_text(prompt, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def admin_dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -2177,28 +2435,27 @@ async def cancel_support_ticket_callback(update: Update, context: ContextTypes.D
 async def modus_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    modus_text = (
-        "Seede-manali-se\nYour Local  Plug🔌\nGet safe and top quality items Anonymously\n"
-        "The new safe way to get you'r shit without the bullshit\n\n"
-        "How It Works ??\n"
-        "1. select your city\n"
-        "2. Select products \n"
-        "3. pay the amount (all deatails wiull be auto deleted within 24 hours )\n"
-        "4. you send us an address thats's convinent to you \n"
-        "5. we drop the product in discreet packaging at your location and send you exact 📍 and a photo \n"
-        "6. that's it you enjoy yourself \n\nlet your buddiess know also \nthank you"
-    )
+    
+    user_id = update.effective_user.id if update.effective_user else (query.from_user.id if query else None)
+    lang = context.user_data.get('lang')
+    if not lang and user_id:
+        lang = get_user_language(user_id)
+        context.user_data['lang'] = lang
+    if not lang or lang not in ('en', 'hi', 'kn', 'ml'):
+        lang = 'en'
+        
+    modus_text = LOCALIZATION[lang]['modus_text']
     try:
         await query.message.edit_text(modus_text)
     except Exception:
         await query.message.reply_text(modus_text)
-    # re-show main menu after modus
+        
+    # show back button
+    back_label = "🔙 Back to Menu" if lang == 'en' else "🔙 मुख्य मेनू" if lang == 'hi' else "🔙 ಮುಖ್ಯ ಮೆನು" if lang == 'kn' else "🔙 പ്രധാന മെനു"
     keyboard = [
-        [InlineKeyboardButton("Contact Admin ✉️", callback_data="contact_admin")],
-        [InlineKeyboardButton("Modus Operandi 📜", callback_data="modus")],
-        [InlineKeyboardButton("View Products 🛍️", callback_data="view_products")]
+        [InlineKeyboardButton(back_label, callback_data="view_menu")]
     ]
-    await query.message.reply_text("Back to menu:", reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.message.reply_text(back_label + ":", reply_markup=InlineKeyboardMarkup(keyboard))
     return ConversationHandler.END
 
 
@@ -2230,15 +2487,26 @@ async def view_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     if query:
         await query.answer()
+        
+    user_id = update.effective_user.id if update.effective_user else (query.from_user.id if query else None)
+    
+    # Get user language preference
+    lang = context.user_data.get('lang')
+    if not lang and user_id:
+        lang = get_user_language(user_id)
+        context.user_data['lang'] = lang
+    if not lang or lang not in ('en', 'hi', 'kn', 'ml'):
+        lang = 'en'
+        
     keyboard = [
-        [InlineKeyboardButton("🛍️ View Products", callback_data="view_products")],
-        [InlineKeyboardButton("📜 My Orders", callback_data="user_orders")],
-        [InlineKeyboardButton("🎁 Refer & Earn", callback_data="refer_earn")],
-        [InlineKeyboardButton("✉️ Contact Admin", callback_data="contact_admin")],
-        [InlineKeyboardButton("📜 Modus Operandi", callback_data="modus")]
+        [InlineKeyboardButton(LOCALIZATION[lang]['view_products'], callback_data="view_products")],
+        [InlineKeyboardButton(LOCALIZATION[lang]['my_orders'], callback_data="user_orders")],
+        [InlineKeyboardButton(LOCALIZATION[lang]['refer_earn'], callback_data="refer_earn")],
+        [InlineKeyboardButton(LOCALIZATION[lang]['contact_admin'], callback_data="contact_admin")],
+        [InlineKeyboardButton(LOCALIZATION[lang]['modus'], callback_data="modus")],
+        [InlineKeyboardButton(LOCALIZATION[lang]['change_lang'], callback_data="change_language")]
     ]
     # Check if admin
-    user_id = update.effective_user.id if update.effective_user else (query.from_user.id if query else None)
     if user_id == ADMIN_CHAT_ID:
         keyboard.append([InlineKeyboardButton("🔧 Admin Dashboard", callback_data="admin_dashboard")])
     
@@ -2251,12 +2519,12 @@ async def view_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         conn.close()
         if grow:
             if grow[0] == 1:
-                keyboard.append([InlineKeyboardButton("👨‍🌾 Gardener Dashboard", callback_data="gardener_dashboard")])
-                keyboard.append([InlineKeyboardButton("📖 How to Use (Gardener)", callback_data="gardener_guide")])
+                keyboard.append([InlineKeyboardButton(LOCALIZATION[lang]['gardener_dashboard'], callback_data="gardener_dashboard")])
+                keyboard.append([InlineKeyboardButton(LOCALIZATION[lang]['gardener_guide'], callback_data="gardener_guide")])
         else:
-            keyboard.append([InlineKeyboardButton("👨‍🌾 Become a Gardener", callback_data="become_gardener")])
+            keyboard.append([InlineKeyboardButton(LOCALIZATION[lang]['become_gardener'], callback_data="become_gardener")])
 
-    text = "Welcome to the Local Plant Shop! 🌿\nChoose an option below:"
+    text = LOCALIZATION[lang]['welcome_menu']
     if query:
         try:
             await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
@@ -4066,6 +4334,8 @@ if __name__ == '__main__':
     app.add_handler(CallbackQueryHandler(gardener_profile_callback, pattern="^gardener_profile$"), group=1)
     app.add_handler(CallbackQueryHandler(gardener_edit_field_callback, pattern=r"^gardener_edit_\w+$"), group=1)
     # gardener flows
+    app.add_handler(CallbackQueryHandler(set_lang_callback, pattern="^set_lang_"), group=1)
+    app.add_handler(CallbackQueryHandler(change_language_callback, pattern="^change_language$"), group=1)
     app.add_handler(CallbackQueryHandler(gardener_guide_callback, pattern="^gardener_guide$"), group=1)
     app.add_handler(CallbackQueryHandler(gardener_become_callback, pattern="^become_gardener$"), group=1)
     app.add_handler(CallbackQueryHandler(gardener_can_yes_callback, pattern="^gardener_can_yes$"), group=1)
