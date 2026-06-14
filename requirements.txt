@@ -4,3 +4,5 @@ requests
 streamlit>=1.0
 pandas
 httpx
+aiosqlite
+python-dotenv
